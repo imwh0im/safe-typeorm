@@ -1,10 +1,8 @@
 import * as orm from "typeorm";
 
 import { IEntity } from "./internal/IEntity";
-import { CreatorType } from "./typings/CreatorType";
-
 import { Belongs } from "./Belongs";
-import { SpecialFields } from "./typings/SpecialFields";
+import { CreatorType } from "./typings/CreatorType";
 
 export namespace Has
 {
@@ -12,7 +10,7 @@ export namespace Has
     export function OneToOne<Mine extends IEntity, Target extends IEntity>
         (
             targetGen: TypeGenerator<Target>,
-            inverse: SpecialFields<Target, Belongs.OneToOne<Mine, any>>
+            inverse: (target: Target) => Belongs.OneToOne<Mine, any>
         ): PropertyDecorator
     {
         return _Has_one_to(orm.OneToOne, targetGen, inverse);
@@ -22,7 +20,7 @@ export namespace Has
     export function OneToMany<Mine extends IEntity, Target extends IEntity>
         (
             targetGen: TypeGenerator<Target>,
-            inverse: SpecialFields<Target, Belongs.ManyToOne<Mine, any>>
+            inverse: (target: Target) => Belongs.ManyToOne<Mine, any>
         ): PropertyDecorator
     {
         return _Has_one_to(orm.OneToMany, targetGen, inverse);
@@ -69,29 +67,26 @@ export namespace Has
         (
             relation: typeof orm.OneToMany,
             targetGen: TypeGenerator<Target>,
-            inverse: SpecialFields<Target, Belongs.ManyToOne<Mine, any>>
+            inverse: (target: Target) => Belongs.ManyToOne<Mine, any>
         ): PropertyDecorator
     {
         return function ($class, $property)
         {
             const label: string = `${$property as string}_helper`;
             const getter: string = `${$property as string}_getter`;
-            const inverseGetter: string = `${inverse}_getter`;
 
-            relation(targetGen, inverseGetter, { lazy: true })($class, getter);
-            
             Object.defineProperty($class, $property,
             {
                 get: function (): Helper<Target, Ret>
                 {
                     if (this[label] === undefined)
-                    {
-                        const inverseField: string = Reflect.getMetadata(`SafeTypeORM:Belongs:field:${inverse}`, targetGen());
                         this[label] = new Helper(this, targetGen(), inverseField, getter)
-                    }
                     return this[label];
                 }
             });
+
+            const inverseField: string = inverse(new (targetGen()))["field_"];
+            relation(targetGen, inverseField, { lazy: true })($class, getter);
         };
     }
 

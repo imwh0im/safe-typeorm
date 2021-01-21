@@ -4,7 +4,6 @@ import { Has } from "./Has";
 import { IEntity } from "./internal/IEntity";
 import { CapsuleNullable } from "./typings/CapsuleNullable";
 import { CreatorType } from "./typings/CreatorType";
-import { SpecialFields } from "./typings/SpecialFields";
 
 export namespace Belongs
 {
@@ -23,14 +22,14 @@ export namespace Belongs
     export function ManyToOne<Mine extends IEntity, Target extends IEntity, Options extends Partial<ManyToOne.IOptions>>
         (
             targetGen: TypeGenerator<Target>, 
-            inverse: SpecialFields<Target, Has.OneToMany<Mine>>,
+            inverse: (target: Target) => Has.OneToMany<Mine>,
             myField: string, 
             options?: Options
         ): PropertyDecorator;
 
     export function ManyToOne(...args: any[]): PropertyDecorator
     {
-        return typeof args[1] === "string" && typeof args[2] === "string"
+        return typeof args[1] === "function"
             ? (_Belongs_to as Function)(orm.ManyToOne, ...args)
             : (_Belongs_to as Function)(orm.ManyToOne, args[0], undefined, ...args.slice(1));
     }
@@ -59,17 +58,18 @@ export namespace Belongs
     export function OneToOne<Mine extends IEntity, Target extends IEntity, Options extends Partial<OneToOne.IOptions>>
         (
             targetGen: TypeGenerator<Target>, 
-            inverse: SpecialFields<Target, Has.OneToOne<Mine>>,
+            inverse: (target: Target) => Has.OneToOne<Mine>,
             myField: string, 
             options?: Options
         ): PropertyDecorator;
 
     export function OneToOne(...args: any[]): PropertyDecorator
     {
-        return typeof args[1] === "string" && typeof args[2] === "string"
+        return typeof args[1] === "function"
             ? (_Belongs_to as Function)(orm.OneToOne, ...args)
             : (_Belongs_to as Function)(orm.OneToOne, args[0], undefined, ...args.slice(1));
     }
+
     export namespace OneToOne
     {
         export interface IOptions extends ManyToOne.IOptions
@@ -79,6 +79,9 @@ export namespace Belongs
         }
     }
 
+    /* -----------------------------------------------------------
+        BACKGROUND
+    ----------------------------------------------------------- */
     class Helper<Target extends IEntity, Options extends Partial<ManyToOne.IOptions>>
     {
         private readonly target_: CreatorType<Target>;
@@ -148,7 +151,7 @@ export namespace Belongs
         (
             relation: typeof orm.ManyToOne | typeof orm.OneToOne,
             targetGen: () => CreatorType<Target>,
-            inverse: SpecialFields<Target, Has.OneToMany<Mine> | Has.OneToOne<Mine>> | undefined,
+            inverse: ((target: Target) => (Has.OneToOne<Mine> | Has.OneToMany<Mine>)) | undefined,
             field: string,
             options?: Options
         ): PropertyDecorator
@@ -158,18 +161,9 @@ export namespace Belongs
 
         return function ($class, $property)
         {
-            // LIST UP LABELS
-            Reflect.defineMetadata(`SafeTypeORM:Belongs:field:${$property as string}`, $property, $class);
-
+            // DEFINE THE PROPERTY
             const getter: string = `${$property as string}_getter`;
             const label: string = `${$property as string}_helper`;
-            
-            orm.Column("int", { ...options, unsigned: true })($class, field);
-            if (inverse)
-                relation(targetGen, `${inverse}_getter`, { ...options, lazy: true })($class, getter);
-            else
-                relation(targetGen, { ...options, lazy: true })($class, getter);
-            orm.JoinColumn({ name: field })($class, getter);
 
             Object.defineProperty($class, $property,
             {
@@ -180,6 +174,17 @@ export namespace Belongs
                     return this[label];
                 }
             });
+            
+            // ADJUST DECORATORS
+            orm.Column("int", { ...options, unsigned: true })($class, field);
+            if (inverse)
+            {
+                const helper: Has.OneToMany<Mine> = inverse(new (targetGen())) as Has.OneToMany<Mine>;
+                relation(targetGen, helper["getter_"], { ...options, lazy: true })($class, getter);
+            }
+            else
+                relation(targetGen, { ...options, lazy: true })($class, getter);
+            orm.JoinColumn({ name: field })($class, getter);
         };
     }
 

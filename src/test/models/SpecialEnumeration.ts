@@ -7,7 +7,8 @@ import { Enumeration } from "./Enumeration";
 @orm.Entity()
 export class SpecialEnumeration extends orm.BaseEntity
 {
-    @Belongs.OneToOne(() => Enumeration, "special",
+    @Belongs.OneToOne(() => Enumeration, 
+        elem => elem.special,
         "id", 
         { primary: true }
     )

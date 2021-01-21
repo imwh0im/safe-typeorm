@@ -11,6 +11,6 @@ export class EnumerationGroup extends orm.BaseEntity
     @IncrementalColumn()
     public readonly id!: number;
 
-    @Has.OneToMany(() => Enumeration, "group")
+    @Has.OneToMany(() => Enumeration, child => child.group)
     public children!: Has.OneToMany<Enumeration>;
 }
